@@ -5,6 +5,7 @@ import json
 import random
 import time
 from pathlib import Path
+import pickle
 
 import numpy as np
 import torch
@@ -175,17 +176,20 @@ def main(args):
                 args.resume, map_location='cpu', check_hash=True)
         else:
             checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])
+        model_without_ddp.load_state_dict(checkpoint['model'], strict=False)
         if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer'])
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             args.start_epoch = checkpoint['epoch'] + 1
 
     if args.eval:
-        test_stats, coco_evaluator = evaluate(model, criterion, postprocessors,
-                                              data_loader_val, base_ds, device, args.output_dir)
+        test_stats, coco_evaluator, raw_res = evaluate(model, criterion, postprocessors,
+                                              data_loader_val, base_ds, device, args.output_dir, return_raw=True)
         if args.output_dir:
             utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
+            fname = output_dir / "raw_res"
+            with open(str(fname), 'wb') as fh:
+                pickle.dump(raw_res, fh)
         return
 
     print("Start training")
